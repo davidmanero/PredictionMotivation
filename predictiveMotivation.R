@@ -1,57 +1,43 @@
 library(corrplot)
 library(caret)
+library(randomForest)
 
-if (!file.exists("pmlTraining.csv")) {
-  download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", 
-                destfile = "pmlTraining.csv")
+if (!file.exists("Training.csv")) {
+  download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", 
+                destfile = "Training.csv")
 }
 
-if (!file.exists("pmlTesting.csv")) {
-  download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", 
-                destfile = "pmlTesting.csv")
+if (!file.exists("Testing.csv")) {
+  download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", 
+                destfile = "Testing.csv")
 }
 
-pmlTraining <- read.csv("pmlTraining.csv", header = TRUE, na.strings = c("NA",""))
-pmlTesting <- read.csv("pmlTesting.csv", header = TRUE, na.strings = c("NA",""))
+Training <- read.csv("Training.csv", header = TRUE, na.strings = c("NA",""))
+Testing <- read.csv("Testing.csv", header = TRUE, na.strings = c("NA",""))
 
-dim(pmlTraining)
+dim(Training)
+dim(Testing)
 
-pmlTraining_filter_col <- pmlTraining[,(colSums(is.na(pmlTraining)) == 0)]
-pmlTesting_filter_col <- pmlTesting[,(colSums(is.na(pmlTesting)) == 0)]
+Training_clean <- Training[,(colSums(is.na(Training)) == 0)]
+Testing_clean <- Testing[,(colSums(is.na(Testing)) == 0)]
 
-removeCol <- c("X","user_name","raw_timestamp_part_1","raw_timestamp_part_2","cvtd_timestamp","new_window")
-pmlTrainig_filter_col <- pmlTraining_filter_col[,!(names(pmlTraining_filter_col) %in% removeCol)]
-pmlTesting_filter_col <- pmlTesting_filter_col[,!(names(pmlTesting_filter_col) %in% removeCol)]
+deleteCol <- c("X","user_name","raw_timestamp_part_1","raw_timestamp_part_2","cvtd_timestamp","new_window")
+Trainig_clean <- Training_clean[,!(names(Training_clean) %in% deleteCol)]
+Testing_clean <- Testing_clean[,!(names(Testing_clean) %in% deleteCol)]
 
-inTrain = createDataPartition(y = pmlTrainig_filter_col$classe, p = 0.7, list = FALSE)
-pmlTraining_sub_data <- pmlTrainig_filter_col[inTrain,]
-pmlValid_sub_data <- pmlTrainig_filter_col[-inTrain,]
+inTrain = createDataPartition(y = Trainig_clean$classe, p = 0.7, list = FALSE)
+Training_partition <- Trainig_clean[inTrain,]
+Training_Test_partition <- Trainig_clean[-inTrain,]
 
-corMatrix<- cor(pmlTraining_sub_data[, -54])
-corrplot(corMatrix, order = "FPC", method = "color", type = "lower", tl.cex = 0.8, tl.col = rgb(0, 0, 0))
 
-preProc <- preProcess(pmlTraining_sub_data[, -54], method = "pca", thresh = 0.99)
-trainPC <- predict(preProc, pmlTraining_sub_data[, -54])
-valid_testPC <- predict(preProc, pmlValid_sub_data[, -54])
+set.seed(123123)
+modelFit <- train(classe ~ ., method="rf", data=Training_partition,
+                  ntree=500, tuneGrid=data.frame(.mtry = 3))
+modelFit$finalModel
 
-modFit <- train(pmlTraining_sub_data$classe ~ ., method = "rf", data = trainPC, trControl = trainControl(method = "cv", number = 4), importance = TRUE)
-
-varImpPlot(modFit$finalModel, sort = TRUE, type = 1, pch = 19, col = 1, cex = 1, main = "Importance of the Individual Principal Components")
-
-predValidRF <- predict(modFit, valid_testPC)
-confus <- confusionMatrix(pmlValid_sub_data$classe, predValidRF)
-confus$table
-
-accur <- postResample(pmlValid_sub_data$classe, predValidRF)
-modAccuracy <- accur[[1]]
-modAccuracy
-
-out_of_sample_error <- 1 - modAccuracy
-out_of_sample_error
-
-testPC <- predict(preProc, pmlTesting_filter_col[, -54])
-pred_final <- predict(modFit, testPC)
-pred_final
+prediction <- predict(modelFit, Testing)
+Testing$classe <- prediction
+prediction
 
 pml_write_files = function(x){
   n = length(x)
@@ -61,4 +47,4 @@ pml_write_files = function(x){
   }
 }
 
-#pml_write_files(as.character(pred_final))
+#pml_write_files(as.character(prediction))

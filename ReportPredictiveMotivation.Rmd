@@ -1,0 +1,136 @@
+---
+title: "ReportPredictiveMotivation"
+author: "David Manero"
+date: "24 de agosto de 2015"
+output: html_document
+---
+
+##Summary
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+In this project, have use the data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+
+
+
+##Data Sets
+
+The training data for this project are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har.
+
+##Loading Data
+
+First we have to load the packages necessaries.
+
+```{r}
+library(caret)
+library(randomForest)
+```
+
+I have download the data from the sources and create the files in the working dirctory.
+```{r}
+if (!file.exists("Training.csv")) {
+  download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", 
+                destfile = "Training.csv")
+}
+
+if (!file.exists("Testing.csv")) {
+  download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", 
+                destfile = "Testing.csv")
+}
+```
+
+And load the files.
+
+```{r}
+Training <- read.csv("Training.csv", header = TRUE, na.strings = c("NA",""))
+Testing <- read.csv("Testing.csv", header = TRUE, na.strings = c("NA",""))
+```
+
+
+##Cleaning Data
+The we can check the data, and see the dimensions.
+
+```{r}
+dim(Training)
+dim(Testing)
+```
+
+We have 19622 observations in the training data, and 20 in the testing data as expected.
+
+We can try to reduce the 160 variables in the data. We take several variables without information, and those who have NAs values.
+
+```{r}
+Training_clean <- Training[,(colSums(is.na(Training)) == 0)]
+Testing_clean <- Testing[,(colSums(is.na(Testing)) == 0)]
+
+deleteCol <- c("X","user_name","raw_timestamp_part_1","raw_timestamp_part_2","cvtd_timestamp","new_window")
+Training_clean <- Training_clean[,!(names(Training_clean) %in% deleteCol)]
+Testing_clean <- Testing_clean[,!(names(Testing_clean) %in% deleteCol)]
+```
+
+And now we have only 54 variables to check.
+```{r}
+dim(Training_clean)
+dim(Testing_clean)
+```
+
+##Data Preparation for Testing and Training
+
+Now we prepare the Training Data doing a partition of 70% of the data for training and 30% for testing the model.
+
+```{r}
+inTrain = createDataPartition(y = Training_clean$classe, p = 0.7, list = FALSE)
+Training_partition <- Training_clean[inTrain,]
+Training_Test_partition <- Training_clean[-inTrain,]
+```
+
+##Training The Model
+
+Since this is a classification problem, the Classification Tree and Random Forest are the candidates to best predicts the outcomes from this data. After some initial testing we opted for Random Forrest algorithm as the accuracy rate of this algorithm was way better than Classification Tree method. Following model trains on the testing data subset after running through a 500 trees with 3 predictors each time.
+
+```{r}
+set.seed(123123)
+modelFit <- train(classe ~ ., method="rf", data=Training_partition,
+                  ntree=500, tuneGrid=data.frame(.mtry = 3))
+modelFit$finalModel
+```
+
+##Evaluation
+
+Here we will evaluate the performance of the model on the validation data set here called (Training_Test_partition). A Confusion Matrix, the estimated accuracy and the estimated out-of-sample error of the model are calculated.
+
+```{r}
+predictedData <- predict(modelFit, Training_Test_partition)
+confusionMatrix(Training_Test_partition$classe, predictedData)
+postResample(predictedData, Training_Test_partition$classe)
+```
+
+##Predicting
+
+Now we use the model to predict the result in the Test data.
+
+```{r}
+predictTesting <- predict(modelFit, Testing)
+Testing$classe <- predictTesting
+predictTesting
+```
+
+##Submission
+
+To Submit the answers of 20 cases in the testing dataset, I have run the following code stub given on the site.
+
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+#pml_write_files(as.character(prediction))
+```
